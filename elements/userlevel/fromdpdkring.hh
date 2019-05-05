@@ -13,7 +13,7 @@ CLICK_DECLS
 
 =c
 
-FromDPDKRing(MEMPOOL [, I<keywords> BURST, NDESC])
+FromDPDKRing(MEM_POOL [, I<keywords> BURST, NDESC])
 
 =s netdevices
 
@@ -21,7 +21,7 @@ reads packets from a circular ring buffer using DPDK (user-level)
 
 =d
 
-Reads packets from the ring buffer with name MEMPOOL.
+Reads packets from the ring buffer with name MEM_POOL.
 On the contrary to FromDevice.u which acts as a sniffer by default, packets
 received by devices put in DPDK mode will NOT be received by the kernel, and
 will thus be processed only once.
@@ -30,7 +30,7 @@ Arguments:
 
 =over 8
 
-=item MEMPOOL
+=item MEM_POOL
 
 String. The name of the memory pool to attach.
 

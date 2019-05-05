@@ -12,7 +12,7 @@ CLICK_DECLS
 
 =c
 
-ToDPDKRing(MEMPOOL m, FROM_PROC p1, TO_PROC p2, [, I<keywords> BURST, etc.])
+ToDPDKRing(MEM_POOL m, FROM_PROC p1, TO_PROC p2, [, I<keywords> BURST, etc.])
 
 =s netdevices
 
@@ -20,7 +20,7 @@ sends packets to a circular ring buffer using DPDK (user-level).
 
 =d
 
-Sends packets to the ring buffer with name MEMPOOL. As DPDK does
+Sends packets to the ring buffer with name MEM_POOL. As DPDK does
 not support polling, this element only supports PUSH. It will build a batch of
 packets inside an internal queue (limited to IQUEUE packets) until it reaches
 BURST packets, and then send the batch to DPDK. If the batch is not ready after
@@ -31,7 +31,7 @@ Arguments:
 
 =over 8
 
-=item MEMPOOL
+=item MEM_POOL
 
 String. The name of the memory pool to attach.
 
