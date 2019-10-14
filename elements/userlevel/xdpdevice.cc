@@ -24,26 +24,29 @@
 #include <click/error.hh>
 
 extern "C" {
-#include <bpf/libbpf.h>
-#include <bpf/bpf.h>
 #include <poll.h>
 #include <time.h>
-#include <signal.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <errno.h>
-#include <pthread.h>
+#include <signal.h>
+#include <stdint.h>
 #include <getopt.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <net/if.h>
+#include <pthread.h>
+#include <bpf/bpf.h>
 #include <sys/mman.h>
 #include <linux/bpf.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
+#include <bpf/libbpf.h>
 #include <sys/resource.h>
 #include <linux/if_xdp.h>
 #include <linux/if_link.h>
+
 }
 
 using std::string;
@@ -721,14 +724,14 @@ void XDPDevice::push()
         FRAME_HEADROOM,
         FRAME_TAILROOM
     );
+    p->set_packet_type_anno(Packet::HOST);
+    p->set_mac_header(p->data(), 14);
     output(0).push(p);
   }
 
   _xsk->rx_npkts += rcvd;
 
   umem_fill_to_kernel_ex(&_xsk->umem->fq, descs, rcvd);
-
-
 }
 
 // ~~~~ to ~~~~
@@ -748,6 +751,31 @@ void XDPDevice::pull()
     if (_trace) {
       //printf("%s sending packet (%d)\n", name().c_str(), p->length());
       //hex_dump((void*)p->data(), p->length(), 1701);
+
+    }
+
+    // click will not compute the header offsets unless the following is done
+    // TODO(ry) moved to ingress to see if this helps etherswitch
+    //p->set_packet_type_anno(Packet::HOST);
+    //p->set_mac_header(p->data(), 14);
+
+    const click_ip *iph{nullptr};
+    if (p->has_network_header()) { 
+      iph = p->ip_header();
+    }
+    if (iph != nullptr) {
+      // icmp only
+      if (iph->ip_p == 1) {
+
+        char buf[256];
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        strftime(buf, 256, "%H:%M:%S.", gmtime(&tv.tv_sec));
+
+        printf("%s%06ld %s [%d] ", buf, tv.tv_usec, name().c_str(), ntohs(iph->ip_id));
+        printf("%s -> ", inet_ntoa(iph->ip_src));
+        printf("%s\n",   inet_ntoa(iph->ip_dst));
+      }
     }
 
     //printf("%s) tx-free %d\n", name().c_str(), xq_nb_free(uq, 1));
@@ -786,9 +814,7 @@ void XDPDevice::pull()
     _xsk->tx_npkts += rcvd;
   }
 
-
   kick_tx(_xsk->sfd);
-
 }
 
 CLICK_ENDDECLS
