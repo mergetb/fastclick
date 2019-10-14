@@ -151,5 +151,6 @@ class XDPDevice : public Element {
     u32 xq_nb_avail(struct xdp_uqueue *q, u32 nb);
     u32 umem_nb_free(struct xdp_umem_uqueue *q, u32 nb);
     struct xdp_umem *umem_config(int sfd);
+    void dump_pkt(const char *prefix, Packet *p);
 
 };

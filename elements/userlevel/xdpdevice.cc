@@ -694,6 +694,29 @@ bool XDPDevice::run_task(Task *t)
   return true;
 }
 
+void XDPDevice::dump_pkt(const char *prefix, Packet *p) {
+
+  const click_ip *iph{nullptr};
+  if (p->has_network_header()) { 
+    iph = p->ip_header();
+  }
+  if (iph != nullptr) {
+    // icmp only
+    if (iph->ip_p == 1) {
+
+      char buf[256];
+      struct timeval tv;
+      gettimeofday(&tv, NULL);
+      strftime(buf, 256, "%H:%M:%S.", gmtime(&tv.tv_sec));
+
+      printf("%s %s%06ld %s [%d] ", prefix, buf, tv.tv_usec, name().c_str(), ntohs(iph->ip_id));
+      printf("%s -> ", inet_ntoa(iph->ip_src));
+      printf("%s\n",   inet_ntoa(iph->ip_dst));
+    }
+  }
+
+}
+
 // process packets received from the kernel
 void XDPDevice::push()
 {
@@ -726,6 +749,7 @@ void XDPDevice::push()
     );
     p->set_packet_type_anno(Packet::HOST);
     p->set_mac_header(p->data(), 14);
+    dump_pkt("RX", p);
     output(0).push(p);
   }
 
@@ -759,24 +783,7 @@ void XDPDevice::pull()
     //p->set_packet_type_anno(Packet::HOST);
     //p->set_mac_header(p->data(), 14);
 
-    const click_ip *iph{nullptr};
-    if (p->has_network_header()) { 
-      iph = p->ip_header();
-    }
-    if (iph != nullptr) {
-      // icmp only
-      if (iph->ip_p == 1) {
-
-        char buf[256];
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        strftime(buf, 256, "%H:%M:%S.", gmtime(&tv.tv_sec));
-
-        printf("%s%06ld %s [%d] ", buf, tv.tv_usec, name().c_str(), ntohs(iph->ip_id));
-        printf("%s -> ", inet_ntoa(iph->ip_src));
-        printf("%s\n",   inet_ntoa(iph->ip_dst));
-      }
-    }
+    dump_pkt("TX", p);
 
     //printf("%s) tx-free %d\n", name().c_str(), xq_nb_free(uq, 1));
     if (xq_nb_free(uq, 1) < 1) {
