@@ -153,4 +153,7 @@ class XDPDevice : public Element {
     struct xdp_umem *umem_config(int sfd);
     void dump_pkt(const char *prefix, Packet *p);
 
+    uint16_t last_rx_ip_id{0};
+    uint16_t last_tx_ip_id{0};
+
 };

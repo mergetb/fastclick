@@ -27,12 +27,13 @@ int moaq_prog(struct xdp_md *ctx)
   int key = 0;
   int *qidconf = bpf_map_lookup_elem(&qidconf_map, &key);
   if (!qidconf) {
-    return XDP_PASS;
-    //return XDP_ABORTED;
+    //return XDP_PASS;
+    return XDP_ABORTED;
   }
 
   if(*qidconf != ctx->rx_queue_index) {
-    return XDP_PASS;
+    return XDP_DROP;
+    //return XDP_PASS;
   }
 
   // redirect all packets on the interface to an XDP socket

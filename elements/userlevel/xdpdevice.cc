@@ -90,39 +90,6 @@ static int bpf(int cmd, union bpf_attr *attr, unsigned int size)
 
 CLICK_DECLS
 
-u32 XDPDevice::xq_nb_avail(struct xdp_uqueue *q, u32 nb)
-{
-  u32 entries = q->cached_prod - q->cached_cons;
-  //printf("entries: %u\n", entries);
-
-  if (entries == 0) {
-    q->cached_prod = *q->producer;
-    entries = q->cached_prod - q->cached_cons;
-  }
-
-  return (entries > nb) ? nb : entries;
-}
-
-int XDPDevice::xq_deq(struct xdp_uqueue *uq, struct xdp_desc *descs, int ndescs)
-{
-  struct xdp_desc *r = uq->ring;
-  int entries = xq_nb_avail(uq, ndescs);
-
-  u_smp_rmb();
-
-  for (int i = 0; i < entries; i++) {
-    int idx = uq->cached_cons++ & uq->mask;
-    descs[i] = r[idx];
-  }
-
-  if (entries > 0) {
-    u_smp_wmb();
-    *uq->consumer = uq->cached_cons;
-  }
-
-  return entries;
-}
-
 void XDPDevice::hex_dump(void *pkt, size_t length, u64 addr)
 {
 	const unsigned char *address = (unsigned char *)pkt;
@@ -173,6 +140,40 @@ u32 XDPDevice::umem_nb_free(struct xdp_umem_uqueue *q, u32 nb)
 
   return q->cached_cons - q->cached_prod;
 }
+
+u32 XDPDevice::xq_nb_avail(struct xdp_uqueue *q, u32 nb)
+{
+  u32 entries = q->cached_prod - q->cached_cons;
+
+  if (entries == 0) {
+    q->cached_prod = *q->producer;
+    entries = q->cached_prod - q->cached_cons;
+  }
+
+  return (entries > nb) ? nb : entries;
+}
+
+int XDPDevice::xq_deq(struct xdp_uqueue *uq, struct xdp_desc *descs, int ndescs)
+{
+  struct xdp_desc *r = uq->ring;
+  int entries = xq_nb_avail(uq, ndescs);
+
+
+  u_smp_rmb();
+
+  for (int i = 0; i < entries; i++) {
+    int idx = uq->cached_cons++ & uq->mask;
+    descs[i] = r[idx];
+  }
+
+  if (entries > 0) {
+    u_smp_wmb();
+    *uq->consumer = uq->cached_cons;
+  }
+
+  return entries;
+}
+
 
 // send descriptors to the kernel
 int XDPDevice::umem_fill_to_kernel_ex(struct xdp_umem_uqueue *q, struct xdp_desc *d, size_t nb)
@@ -709,9 +710,15 @@ void XDPDevice::dump_pkt(const char *prefix, Packet *p) {
       gettimeofday(&tv, NULL);
       strftime(buf, 256, "%H:%M:%S.", gmtime(&tv.tv_sec));
 
-      printf("%s %s%06ld %s [%d] ", prefix, buf, tv.tv_usec, name().c_str(), ntohs(iph->ip_id));
+      printf("%s %s%06ld %s [%d] ", 
+          prefix, 
+          buf, tv.tv_usec, 
+          name().c_str(), 
+          ntohs(iph->ip_id)
+      );
       printf("%s -> ", inet_ntoa(iph->ip_src));
       printf("%s\n",   inet_ntoa(iph->ip_dst));
+      fflush(stdout);
     }
   }
 
@@ -749,7 +756,19 @@ void XDPDevice::push()
     );
     p->set_packet_type_anno(Packet::HOST);
     p->set_mac_header(p->data(), 14);
+
     dump_pkt("RX", p);
+    
+    /*
+    if (p->has_network_header()) {
+      const click_ip *iph = p->ip_header();
+      if (iph->ip_id == last_rx_ip_id) {
+        printf("RX DUPE %d / %d\n", iph->ip_id, ntohs(iph->ip_id));
+      }
+      last_rx_ip_id = iph->ip_id;
+    }
+    */
+
     output(0).push(p);
   }
 
@@ -771,6 +790,16 @@ void XDPDevice::pull()
 
   size_t i{0};
   for (Packet *p = input(0).pull(); p != nullptr; p = input(0).pull(), i++) {
+
+    /*
+    if (p->has_network_header()) {
+      const click_ip *iph = p->ip_header();
+      if (iph->ip_id == last_tx_ip_id) {
+        printf("TX DUPE %d / %d\n", iph->ip_id, ntohs(iph->ip_id));
+      }
+      last_tx_ip_id = iph->ip_id;
+    }
+    */
 
     if (_trace) {
       //printf("%s sending packet (%d)\n", name().c_str(), p->length());
