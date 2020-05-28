@@ -1,8 +1,8 @@
 /*
- * setcyclecount.{cc,hh} -- set cycle counter annotation
- * Eddie Kohler
+ * UnstripAnno.{cc,hh} -- element strips a dynamic amount of bytes from front of packet
+ * Tom Barbette
  *
- * Copyright (c) 1999-2000 Massachusetts Institute of Technology
+ * Copyright (c) 2020 KTH Royal Institute of Technology
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -16,33 +16,35 @@
  */
 
 #include <click/config.h>
-#include "setcyclecount.hh"
+#include <click/args.hh>
+#include <click/error.hh>
 #include <click/glue.hh>
 #include <click/packet_anno.hh>
+#include "unstripanno.hh"
+CLICK_DECLS
 
-SetCycleCount::SetCycleCount()
+UnstripAnno::UnstripAnno()
 {
 }
 
-SetCycleCount::~SetCycleCount()
+int
+UnstripAnno::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-}
-
-void
-SetCycleCount::push(int, Packet *p)
-{
-  SET_PERFCTR_ANNO(p, click_get_cycles());
-  output(0).push(p);
+	int anno = PAINT2_ANNO_OFFSET;
+    if (Args(conf, this, errh)
+			.read_p("ANNO", AnnoArg(2), anno)
+			.complete() < 0)
+				return -1;
+    _anno = anno;
+    return 0;
 }
 
 Packet *
-SetCycleCount::pull(int)
+UnstripAnno::simple_action(Packet *p)
 {
-  Packet *p = input(0).pull();
-  if (p)
-    SET_PERFCTR_ANNO(p, click_get_cycles());
-  return p;
+  return p->push(p->anno_u16(_anno));
 }
 
-ELEMENT_REQUIRES(linuxmodule int64)
-EXPORT_ELEMENT(SetCycleCount)
+CLICK_ENDDECLS
+EXPORT_ELEMENT(UnstripAnno)
+ELEMENT_MT_SAFE(UnstripAnno)

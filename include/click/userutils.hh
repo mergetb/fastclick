@@ -52,6 +52,10 @@ const char *filename_landmark(const char *, bool file_is_expr = false);
 String file_string(FILE *, ErrorHandler * = 0);
 String file_string(String, ErrorHandler * = 0);
 
+
+void file_read_lines(FILE*, Vector<String>&);
+int file_read_lines(String, Vector<String>&, ErrorHandler * = 0);
+
 String unique_tmpnam(const String &, ErrorHandler * = 0);
 void remove_file_on_exit(const String &);
 bool path_allows_default_path(String path);
@@ -87,6 +91,9 @@ FILE *open_uncompress_pipe(const String &filename, const unsigned char *buf,
 
 int compressed_filename(const String &filename);
 FILE *open_compress_pipe(const String &filename, ErrorHandler *);
+
+uint64_t bit_extractor(const uint64_t &number, const unsigned short &k, const unsigned short &p);
+String number_to_binary_str(const uint64_t &number, const unsigned &bits_nb = 32);
 
 #if HAVE_DYNAMIC_LINKING
 int clickdl_load_package(String, ErrorHandler *);

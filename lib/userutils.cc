@@ -361,6 +361,43 @@ file_string(String filename, ErrorHandler *errh)
   return s;
 }
 
+void
+file_read_lines(FILE *f, Vector<String> &lines)
+{
+    char * line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    while ((read = getline(&line, &len, f)) != -1) {
+        lines.push_back(String(line,read));
+    }
+
+    if (line)
+        free(line);
+}
+
+int
+file_read_lines(String filename, Vector<String> &lines, ErrorHandler *errh)
+{
+  FILE *f;
+  if (filename && filename != "-") {
+    f = fopen(filename.c_str(), "rb");
+    if (!f) {
+      if (errh)
+	errh->error("%s: %s", filename.c_str(), strerror(errno));
+      return -1;
+    }
+  } else {
+    f = stdin;
+    filename = "<stdin>";
+  }
+
+  file_read_lines(f, lines);
+
+  if (f != stdin)
+    fclose(f);
+  return 0;
+}
 
 String
 unique_tmpnam(const String &pattern, ErrorHandler *errh)
@@ -777,6 +814,30 @@ open_compress_pipe(const String &filename, ErrorHandler *errh)
 	errh->error("%<%s%>: %s", cmd.c_str(), strerror(errno));
 	return 0;
     }
+}
+
+/*
+ * Extract @a k bits from @a p position of @a number and
+ * return the extracted value as integer.
+ */
+uint64_t
+bit_extractor(const uint64_t &number, const unsigned short &k, const unsigned short &p)
+{
+    return (((1 << k) - 1) & (number >> (p - 1)));
+}
+
+/*
+ * Convert @a bits_nb (MSB) of number @a number to binary and
+ * return the result as a string.
+ */
+String
+number_to_binary_str(const uint64_t &number, const unsigned &bits_nb)
+{
+    StringAccum sa;
+    if (bits_nb <= 64)
+	for (unsigned i = 1 << (bits_nb-1); i > 0; i = i / 2)
+        	(number & i)? sa << "1" : sa << "0";
+    return sa.take_string();
 }
 
 #if HAVE_DYNAMIC_LINKING
