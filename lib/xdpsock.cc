@@ -81,12 +81,22 @@ void XDPSock::configure_socket()
     }
     xsk_ring_prod__submit(&_xsk->umem->fq, NUM_RX_DESCS);
 
-    _fd.fd = xsk_socket__fd(_xsk->xsk);
-    _fd.events = POLLIN;
+    _fd = xsk_socket__fd(_xsk->xsk);
 
-    ret = bpf_map_update_elem(_xsks_map, &_queue_id, &_fd.fd, 0);
+    ret = bpf_map_update_elem(_xsks_map, &_queue_id, &_fd, 0);
     if (ret) die("failed to update bpf map elem", -ret);
 
+
+}
+
+void XDPSock::kick_tx()
+{
+
+  int ret = sendto(xsk_socket__fd(_xsk->xsk), NULL, 0, MSG_DONTWAIT, NULL, 0);
+  if (ret >= 0 || errno == ENOBUFS || errno == EAGAIN || errno == EBUSY)
+    return;
+
+  die("failed to kick tx", ret);
 
 }
 
@@ -127,9 +137,6 @@ void XDPSock::fq_replenish() {
     size_t ndescs;
     int ret, i;
 
-    if (!_xsk->outstanding_fq)
-        return;
-
     ndescs = _xsk->outstanding_fq < BATCH_SIZE 
                 ? _xsk->outstanding_fq 
                 : BATCH_SIZE;
@@ -143,8 +150,10 @@ void XDPSock::fq_replenish() {
     if(_trace)
         printf("fq: replenish %d\n", ret);
 
-    if (xsk_ring_prod__needs_wakeup(&_xsk->umem->fq))
-        poll(&_fd, 1, 0);
+    if (xsk_ring_prod__needs_wakeup(&_xsk->umem->fq)) {
+	pollfd p = { .fd = _fd, .events = POLLIN };
+        poll(&p, 1, 0);
+    }
 
     for (i = 0; i < ret; i++)
         *xsk_ring_prod__fill_addr(&_xsk->umem->fq, idx_fq++) =
@@ -202,194 +211,48 @@ void XDPSock::rx(PBuf &pb)
     xsk_ring_cons__release(&_xsk->rx, rcvd);
     _xsk->rx_npkts += rcvd;
     _xsk->outstanding_fq += rcvd;
+
+    fq_replenish();
 }
-
-
-#if 0
-void XDPSock::rx(PBuf &pb) 
-{
-
-  static int cnt{0};
-  pb.len = 0;
-  u32 idx_rx{0};
-
-  // peek into the rx ring
-  if(_trace) {
-    printf("[%s:%d] (%d) rx\n", _xfx->dev().c_str(), _queue_id, cnt++);
-    printf("[%s:%d] rx peeking\n", _xfx->dev().c_str(), _queue_id);
-  }
-  uint rcvd = xsk_ring_cons__peek(&_xsk->rx, BATCH_SIZE, &idx_rx);
-
-  // if there is nothing to be received, bail
-  if (!rcvd) {
-    return;
-  }
-  if(_trace) {
-    printf("[%s:%d] rx rcvd=%u\n", _xfx->dev().c_str(), _queue_id, rcvd);
-    printf("[%s:%d] rx reserving\n", _xfx->dev().c_str(), _queue_id);
-  }
-
-  // prepare to give the kernel new frames to replace the ones in the rx ring
-  u32 idx_fq{0};
-  int ret = xsk_ring_prod__reserve(&_xsk->umem->fq, rcvd, &idx_fq);
-  while (ret != rcvd) {
-    if (ret < 0) {
-      die("queue reserve failed", ret);
-    }
-    printf("[%s:%d] rx reserving again\n", _xfx->dev().c_str(), _queue_id);
-    ret = xsk_ring_prod__reserve(&_xsk->umem->fq, rcvd, &idx_fq);
-  }
-
-  for (size_t i = 0; i < rcvd; i++) {
-
-    if(_trace) {
-      printf("[%s:%d] rx accessing desc @%u\n", _xfx->dev().c_str(), _queue_id, idx_rx+i);
-    }
-
-    auto *desc = xsk_ring_cons__rx_desc(&_xsk->rx, idx_rx+i);
-
-    if(_trace) {
-      printf("[%s:%d] rx accessing data @%x\n", _xfx->dev().c_str(), _queue_id, desc->addr);
-    }
-
-    char *xsk_pkt = static_cast<char*>(
-        xsk_umem__get_data(_xsk->umem->buffer, desc->addr)
-    );
-
-    /*
-    char *click_pkt = static_cast<char*>( malloc(desc->len) );
-    memcpy(click_pkt, xsk_pkt, desc->len);
-    */
-
-    WritablePacket* p =
-        Packet::make(reinterpret_cast<unsigned char*>(xsk_pkt), desc->len,
-                     free_pkt, xsk_pkt, FRAME_HEADROOM, FRAME_TAILROOM);
-    p->timestamp_anno();
-    p->set_anno_u32(7, _queue_id);
-    pb.pkts[i] = p;
-
-    if(_trace) {
-      printf("[%s:%d] setting fill addr @%u\n", _xfx->dev().c_str(), _queue_id, idx_fq+i);
-    }
-
-    // TODO get next frame from UMEM manager and give to kernel to keep fill
-    // queue as full as possible
-    //*xsk_ring_prod__fill_addr(&_xsk->umem->fq, idx_fq+i) = desc->addr;
-    xsk_ring_prod__fill_addr(&_xsk->umem->fq, _umem_mgr->next());
-  }
-  pb.len = rcvd;
-
-  if(_trace) {
-    printf("[%s:%d] rx submitting \n", _xfx->dev().c_str(), _queue_id);
-  }
-  xsk_ring_prod__submit(&_xsk->umem->fq, rcvd);
-
-  if(_trace) {
-    printf("[%s:%d] rx releasing\n", _xfx->dev().c_str(), _queue_id);
-  }
-  xsk_ring_cons__release(&_xsk->rx, rcvd);
-  _xsk->rx_npkts += rcvd;
-
-}
-#endif
 
 void XDPSock::tx(Packet *p)
 {
     int ret;
     size_t i;
     u32 idx_tx = 0;
+    
+    tx_complete();
 
     //TODO batch interface
-     ret = xsk_ring_prod__reserve(&_xsk->tx, 1, &idx_tx);
+    ret = xsk_ring_prod__reserve(&_xsk->tx, 1, &idx_tx);
     while (ret != 1) {
-            printf("fwd: re-reserve\n");
-            if (ret < 0) die("tx reserve failed", -ret);
-            if (xsk_ring_prod__needs_wakeup(&_xsk->tx)) kick_tx();
-            ret = xsk_ring_prod__reserve(&_xsk->tx, 1, &idx_tx);
+	printf("fwd: re-reserve\n");
+	if (ret < 0) die("tx reserve failed", -ret);
+	if (xsk_ring_prod__needs_wakeup(&_xsk->tx)) kick_tx();
+	ret = xsk_ring_prod__reserve(&_xsk->tx, 1, &idx_tx);
     }
 
     for (i = 0; i < ret; i++) {
-            const struct xdp_desc *in;
-            struct xdp_desc *out;
+	const struct xdp_desc *in;
+	struct xdp_desc *out;
 
-            // collect ingress/egress descriptors
-            out = xsk_ring_prod__tx_desc(&_xsk->tx, idx_tx++);
-            u32 addr = p->anno_u64(12);
-            if(_trace)
-                printf("addr=%d\n", addr);
+	// collect ingress/egress descriptors
+	out = xsk_ring_prod__tx_desc(&_xsk->tx, idx_tx++);
+	u32 addr = p->anno_u64(12);
+	if(_trace)
+	    printf("addr=%d\n", addr);
 
-            if (_trace) {
-                printf("tx: addr=%lld len=%d\n", out->addr, addr);
-            }
+	if (_trace) {
+	    printf("tx: addr=%lld len=%d\n", out->addr, addr);
+	}
 
-            // apply ingres as egress (forward)
-            out->addr = addr;
-            out->len  = p->length();
+	// apply ingres as egress (forward)
+	out->addr = addr;
+	out->len  = p->length();
     }
     xsk_ring_prod__submit(&_xsk->tx, ret);
     _xsk->outstanding_tx += ret;
-}
 
-/*
-void XDPSock::tx(Packet *p)
-{
-  if(_trace) {
-    printf("[%s]tx\n", _xfx->dev().c_str());
-  }
-
-  u32 idx{0};
-
-  size_t avail = xsk_ring_prod__reserve(&_xsk->tx, 1, &idx);
-  if (avail < 1) {
-    printf("xdpsock: ring overflow\n");
-    return;
-  }
-
-
-  xdp_desc *desc = xsk_ring_prod__tx_desc(&_xsk->tx, idx);
-  desc->len = p->length();
-  memcpy(
-      xsk_umem__get_data(_xsk->umem->buffer, desc->addr),
-      p->data(),
-      p->length()
-  );
-
-  xsk_ring_prod__submit(&_xsk->tx, 1);
-  _xsk->outstanding_tx++;
-
-}
-*/
-
-void XDPSock::kick()
-{
-
-  if (!_xsk->outstanding_tx) {
-    return;
-  }
-
-  kick_tx();
-
-  int n = _xsk->outstanding_tx > BATCH_SIZE ? BATCH_SIZE : _xsk->outstanding_tx;
-
-  u32 idx{0};
-  uint rcvd = xsk_ring_cons__peek(&_xsk->umem->cq, n, &idx);
-  if (rcvd > 0) {
-    xsk_ring_cons__release(&_xsk->umem->cq, rcvd);
-    _xsk->outstanding_tx -= rcvd;
-    _xsk->tx_npkts += rcvd;
-  }
-
-
-}
-
-void XDPSock::kick_tx()
-{
-
-  int ret = sendto(xsk_socket__fd(_xsk->xsk), NULL, 0, MSG_DONTWAIT, NULL, 0);
-  if (ret >= 0 || errno == ENOBUFS || errno == EAGAIN || errno == EBUSY)
-    return;
-
-  die("failed to kick tx", ret);
-
+    kick_tx();
 }
 

@@ -22,9 +22,11 @@ class XDPInterface : public std::enable_shared_from_this<XDPInterface> {
     );
 
     void init();
-    const vector<PBuf> & rx();
+    const PBuf& rx(int fd); // receive packets for the specified xdp socket
     void tx(Packet *p, u32 queue_id);
-    void kick(u32 queue_id);
+    //void kick(u32 queue_id);
+    std::vector<int> get_fds(); // return an array of the xdp socket file descriptors for this interface
+    u32 get_queue(int fd);
 
     // accessors
     inline const vector<XDPSockSP> & socks() const  { return _socks; }
@@ -35,6 +37,7 @@ class XDPInterface : public std::enable_shared_from_this<XDPInterface> {
     inline u16 xdp_flags() const                    { return _xdp_flags; }
     inline u16 bind_flags() const                   { return _bind_flags; }
     inline uint ifindex() const                     { return _ifindex; }
+    
 
 
   private:
@@ -54,11 +57,10 @@ class XDPInterface : public std::enable_shared_from_this<XDPInterface> {
                              _xsks_map_fd;
     uint                     _ifindex;
     vector<XDPSockSP>        _socks;
-    vector<pollfd>           _poll_fds;
-    bool                     _trace,
-                             _poll{true};
+    bool                     _trace;
     vector<PBuf>             _pbufs;
     XDPUMEMSP _xm;
+    std::map<int,u32>        _fd_map; // map xdp socket fd -> queue id
   
 };
 

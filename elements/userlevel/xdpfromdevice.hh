@@ -22,12 +22,13 @@ class XDPFromDevice : public BatchElement, XDPDev {
     const char *port_count() const override final { return PORTS_0_1; }
     const char *processing() const override final { return PUSH; }
 
-    bool run_task(Task *t) override final;
+    //bool run_task(Task *t) override final;
+    void selected(int, int) override final;
     void rx();
     void rx_batch();
 
   private:
-    Task *_t{nullptr};
+    //Task *_t{nullptr};
 
     std::string _dev,
                 _prog;

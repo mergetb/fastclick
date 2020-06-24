@@ -159,13 +159,24 @@ void XDPInterface::create_device_sockets() {
     // create polling file descriptors
 
     for (XDPSockSP x : _socks) {
-        _poll_fds.push_back(x->_fd);
+        //_poll_fds.push_back(x->_fd);
+	_fd_map[x->_fd] = x->_queue_id;
     }
 
     _pbufs = vector<PBuf>(numchan);
     close(fd);
 }
 
+// Return an array of XDP socket file descriptors for this interface
+std::vector<int> XDPInterface::get_fds() {
+    std::vector<int> ret;
+    for (XDPSockSP x : _socks) {
+	ret.push_back(x->_fd);
+    }
+    return ret;
+}
+
+#if 0
 const vector<PBuf>& XDPInterface::rx() {
 
     for (u32 i = 0; i < _poll_fds.size(); i++) {
@@ -199,18 +210,38 @@ const vector<PBuf>& XDPInterface::rx() {
 
     return _pbufs;
 }
+#endif
+
+u32 XDPInterface::get_queue(int fd) {
+    auto it = _fd_map.find(fd);
+    if (it == _fd_map.end()) {
+	die("can't map xdp socket fd to queue id");
+    }
+    return it->second;
+}
+
+// receive packets on the xdp socket `fd`
+const PBuf& XDPInterface::rx(int fd) {
+    u32 queue_id = get_queue(fd);
+    //_socks[queue_id]->fq_replenish();
+    _socks[queue_id]->rx(_pbufs[queue_id]);
+    return _pbufs[queue_id];
+}
 
 void XDPInterface::tx(Packet* p, u32 queue_id) {
+#if 0
     // need to map between queue index and queue group
     // https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=v5.4.6&id=db05815b36cbd486c86fd002dfa81c9af6245e25
     if (is_mlx5 && (_xdp_flags & XDP_ZEROCOPY)) {
         queue_id -= _poll_fds.size();
     }
+#endif
     if(_trace) 
         printf("txq=%d\n", queue_id);
     _socks[queue_id]->tx(p);
 }
 
+#if 0
 void XDPInterface::kick(u32 queue_id) {
     // need to map between queue index and queue group
     // https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=v5.4.6&id=db05815b36cbd486c86fd002dfa81c9af6245e25
@@ -219,4 +250,4 @@ void XDPInterface::kick(u32 queue_id) {
     }
     _socks[queue_id]->kick();
 }
-
+#endif

@@ -36,15 +36,14 @@ class XDPSock {
 
     void rx(PBuf &pb);
     void tx(Packet *p);
-    void kick();
 
     inline u32 queue_id() const { return _queue_id; }
+    inline int fd() const { return _fd; }
 
   private:
     //void configure_umem();
     void configure_socket();
     void kick_tx();
-
     void tx_complete();
     void fq_replenish();
 
@@ -55,8 +54,8 @@ class XDPSock {
     //xsk_umem_info                   *_umem;
     void                            *_umem_buf;
     bool                            _trace;
-    pollfd                          _fd;
     int                             _xsks_map;
+    int                             _fd;
 
     std::shared_ptr<XDPUMEM> _umem_mgr{nullptr};
 

@@ -43,19 +43,22 @@ int XDPToDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 
 void XDPToDevice::push(int port, Packet *p)
 {
-  u32 q = p->anno_u32(8);
-  _xfx->tx(p, q);
-  p->kill();
-  _xfx->kick(q);
-  if (_trace) {
-    printf("[%s] tx q=%d\n", name().c_str(), q);
-  }
+    u32 q = p->anno_u32(8); // receive queue
+    _xfx->tx(p, q);
+    p->kill();
+
+    //_xfx->kick(q); // not needed anymore?
+
+    if (_trace) {
+	printf("[%s] tx q=%d\n", name().c_str(), q);
+    }
 }
 
 void XDPToDevice::push_batch(int, PacketBatch *head)
 {
   return;
 
+#if 0
   unordered_set<u32> to_kick{};
 
   for(Packet *p = head; p != nullptr; p = p->next()) {
@@ -68,6 +71,7 @@ void XDPToDevice::push_batch(int, PacketBatch *head)
   for (u32 q : to_kick) {
     _xfx->socks()[q]->kick();
   }
+#endif
 
 }
 

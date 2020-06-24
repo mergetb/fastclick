@@ -12,8 +12,18 @@ CLICK_DECLS
 int XDPFromDevice::initialize(ErrorHandler *errh) {
 
   _xfx = XDPManager::get().ensure(_dev, _prog, _xdp_flags, _bind_flags, _trace);
+#if 0
   _t = new Task(this);
   _t->initialize(this, true);
+#endif
+
+#if 1
+  // add fds for all channels to the global fd event.
+  // calls ::selected() when there are packets ready
+  for (int fd : _xfx->get_fds()) {
+      add_select(fd, SELECT_READ);
+  }
+#endif
 
   return INITIALIZE_SUCCESS;
 
@@ -51,6 +61,7 @@ int XDPFromDevice::configure(Vector<String> &conf, ErrorHandler *errh) {
 
 }
 
+#if 0
 bool XDPFromDevice::run_task(Task *t)
 {
   
@@ -65,7 +76,22 @@ bool XDPFromDevice::run_task(Task *t)
   return true;
 
 }
+#endif
 
+// called when a packet is available for processing
+void XDPFromDevice::selected(int fd, int mask) {
+    (void) mask; // always SELECT_READ
+    if (_trace)
+	printf("packet ready on dev %s fd %d\n", _dev.c_str(), fd);
+
+    const PBuf &pbuf = _xfx->rx(fd);
+    if (_trace)
+	printf("rcvd %lu packets on dev %s fd %d\n", pbuf.len, _dev.c_str(), fd);
+    for (size_t i=0; i < pbuf.len; i++)
+	output(0).push(pbuf.pkts[i]);
+}
+
+#if 0
 #if HAVE_BATCH
 void XDPFromDevice::rx_batch()
 {
@@ -101,6 +127,7 @@ void XDPFromDevice::rx()
   }
 
 }
+#endif
 #endif
 
 
