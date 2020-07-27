@@ -11,6 +11,8 @@ using std::make_shared;
 using std::string;
 using std::vector;
 
+uint8_t current_epoch {0};
+
 XDPSock::XDPSock(XDPInterfaceSP xfx, XDPUMEMSP xm, u32 queue_id, int xsks_map, bool trace)
 : _xfx{xfx},
   _queue_id{queue_id},
@@ -117,8 +119,14 @@ void XDPSock::tx_complete()
         printf("tx: %d packets transmitted out %s\n", rcvd, _xfx->dev().c_str());
     }
     xsk_ring_cons__release(&_xsk->umem->cq, rcvd);
+    if (rcvd > _xsk->outstanding_tx) {
+	    die("tx_complete: underflow", -1);
+    }
     _xsk->outstanding_tx -= rcvd;
     _xsk->tx_npkts += rcvd;
+
+    if (_trace && _xsk->outstanding_tx > 0)
+	    printf("tx pending %u\n", _xsk->outstanding_tx);
 }
 
 void XDPSock::fq_replenish() {
@@ -151,6 +159,10 @@ void XDPSock::fq_replenish() {
             umem_next() * FRAME_SIZE;
 
     xsk_ring_prod__submit(&_xsk->umem->fq, ret);
+
+    if (ret > _xsk->outstanding_fq)
+	    die("fq_replenish: underflow", -1);
+
     _xsk->outstanding_fq -= ret;
 }
 
@@ -196,6 +208,7 @@ void XDPSock::rx(PBuf &pb)
         if(_trace)
             printf("setaddr=%d\n", in->addr);
         p->set_anno_u64(12, in->addr);
+	p->set_anno_u8(20, current_epoch);
         pb.pkts[i] = p;
     }
     pb.len = rcvd;
@@ -299,6 +312,13 @@ void XDPSock::tx(Packet *p)
     size_t i;
     u32 idx_tx = 0;
 
+    uint8_t epoch = p->anno_u8(20);
+
+    if (epoch != current_epoch) {
+	    printf("epoch=%u packet=%u\n", current_epoch, epoch);
+	    return;
+    }
+
     //TODO batch interface
      ret = xsk_ring_prod__reserve(&_xsk->tx, 1, &idx_tx);
     while (ret != 1) {
@@ -375,10 +395,12 @@ void XDPSock::kick()
   uint rcvd = xsk_ring_cons__peek(&_xsk->umem->cq, n, &idx);
   if (rcvd > 0) {
     xsk_ring_cons__release(&_xsk->umem->cq, rcvd);
+    if (rcvd > _xsk->outstanding_tx) {
+	    die("kick: underflow", -1);
+    }
     _xsk->outstanding_tx -= rcvd;
     _xsk->tx_npkts += rcvd;
   }
-
 
 }
 
