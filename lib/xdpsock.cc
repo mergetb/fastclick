@@ -315,7 +315,7 @@ void XDPSock::tx(Packet *p)
     uint8_t epoch = p->anno_u8(20);
 
     if (epoch != current_epoch) {
-	    printf("epoch=%u packet=%u\n", current_epoch, epoch);
+	    //printf("epoch=%u packet=%u\n", current_epoch, epoch);
 	    return;
     }
 
