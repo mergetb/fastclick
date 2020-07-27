@@ -94,7 +94,7 @@ void XDPFromDevice::rx()
     for(size_t j=0; j<pbufs[i].len; j++) {
       output(0).push(pbufs[i].pkts[j]);
       if (_trace) {
-        printf("[%s] rx q=%d\n", name().c_str(), i);
+        printf("[%s] rx q=%lu\n", name().c_str(), i);
       }
     }
 
