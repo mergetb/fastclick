@@ -56,7 +56,7 @@ class XDPInterface : public std::enable_shared_from_this<XDPInterface> {
     vector<XDPSockSP>        _socks;
     vector<pollfd>           _poll_fds;
     bool                     _trace,
-                             _poll{true};
+                             _poll{false};
     vector<PBuf>             _pbufs;
     XDPUMEMSP _xm;
   
