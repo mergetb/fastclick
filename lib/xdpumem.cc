@@ -52,6 +52,7 @@ XDPUMEM::XDPUMEM(u32 num_frames, u32 frame_size, u32 fill_size, u32 comp_size, v
         &_umem->cq, &cfg
     );
     if (ret) {
+	    printf("xsk_umem_create: ret=%d\n", ret);
         throw runtime_error{"umem create failed"};
     }
 

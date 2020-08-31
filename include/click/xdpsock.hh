@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <mutex>
 
 extern "C" {
 #include <linux/if_xdp.h>
@@ -69,11 +70,18 @@ static inline void free_pkt(unsigned char *pkt, size_t, void *pktmbuf)
     // notthing to do, packets are part of an emulation wide ringbuffer
 }
 
+extern uint8_t current_epoch;
+
 static inline u64 umem_next(void)
 {
+	static std::mutex mu;
         static u64 __i = 0;
+	mu.lock();
         u64 x = __i;
         __i = (__i+1) & (NUM_FRAMES - 1);
         //dbg("i=%llu\n", x);
+	if (__i == 0)
+		++current_epoch;
+	mu.unlock();
         return x;
 }
