@@ -1356,11 +1356,11 @@ if test "x$enable_cpu_load" = xyes; then
 fi
 
 
-AC_ARG_ENABLE([flow-api], [AS_HELP_STRING([--enable-flow-api], [Support for the HW flow classification API. Also needs DPDK>=20.02 ])], :, enable_flow_api=no)
-AC_CHECK_FILE($srcdir/include/click/flowdispatcher.hh, [ac_have_flow_disp_h=yes], [ac_have_flow_disp_h=no])
-AC_CHECK_FILE($srcdir/include/click/flowdispatcherparser.hh, [ac_have_flow_disp_p_h=yes], [ac_have_flow_disp_p_h=no])
-AC_CHECK_FILE($srcdir/include/click/flowdispatcherglue.hh, [ac_have_flow_disp_g_h=yes], [ac_have_flow_disp_g_h=no])
-if test "x$ac_have_flow_disp_h$ac_have_flow_disp_p_h$ac_have_flow_disp_g_h$RTE_VER_YEAR$enable_flow_api" = "xyesyesyes20yes"; then
+AC_ARG_ENABLE([flow-api], [AS_HELP_STRING([--enable-flow-api], [Support for the HW flow classification API. Also needs DPDK>=20.02 ])], [:], [enable_flow_api=no])
+AC_CHECK_FILE($srcdir/include/click/flowruleparser.hh, [ac_have_flow_rule_parser_h=yes], [ac_have_flow_rule_parser_h=no])
+AC_CHECK_FILE($srcdir/include/click/flowrulecache.hh, [ac_have_flow_rule_cache_h=yes], [ac_have_flow_rule_cache_h=no])
+AC_CHECK_FILE($srcdir/include/click/flowrulemanager.hh, [ac_have_flow_rule_man_h=yes], [ac_have_flow_rule_man_h=no])
+if test "x$ac_have_flow_rule_parser_h$ac_have_flow_rule_cache_h$ac_have_flow_rule_man_h$RTE_VER_YEAR$enable_flow_api" = "xyesyesyes20yes"; then
     have_flow_api=yes
     AC_DEFINE([HAVE_FLOW_API])
 else
@@ -2496,6 +2496,11 @@ else
     have_pcap=no
 fi
 
+dnl add 'pci' if libpci support is available
+if test "x$have_pci" = xyes; then
+    provisions="$provisions pci"
+fi
+
 dnl add 're2' if re2 is available
 if test "x$have_re2" = xyes; then
     provisions="$provisions re2"
@@ -2524,11 +2529,6 @@ fi
 dnl add 'wifi' if wifi elements are available
 if test "x$enable_wifi" = xyes; then
     provisions="$provisions wifi"
-fi
-
-dnl add 'pci' if libpci support is available
-if test "x$have_pci" = xyes; then
-    provisions="$provisions pci"
 fi
 
 AC_SUBST(provisions)
@@ -2567,7 +2567,7 @@ AC_OUTPUT
 feedback="no"
 
 if test "$enable_flow_api$have_flow_api" = "yesno"; then
-    feedback="To enable DPDK's Flow Dispatcher (rte_flow API), use a DPDK version >= 20.02."
+    feedback="To enable DPDK's Flow Rule Manager (rte_flow API), use a DPDK version >= 20.02."
 fi
 
 echo "

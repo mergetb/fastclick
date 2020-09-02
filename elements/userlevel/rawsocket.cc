@@ -35,7 +35,6 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <linux/sockios.h>
-
 #ifndef __sun
 #include <sys/ioctl.h>
 #else
