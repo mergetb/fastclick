@@ -141,17 +141,6 @@ class FlowRuleManager {
         };
         inline String rules_filename() { return _rules_filename; };
 
-        // Flow rules' isolation mode
-        static inline void set_isolation_mode(const portid_t &port_id, const bool &isolated) {
-            _isolated.insert(port_id, isolated);
-            if (_isolated[port_id]) {
-                flow_rules_isolate(port_id, 1);
-            } else {
-                flow_rules_isolate(port_id, 0);
-            }
-        };
-        static inline bool isolated(const portid_t &port_id) { return _isolated[port_id]; };
-
         // Calibrates flow rule cache before inserting new rules
         void flow_rule_cache_calibrate(const uint32_t *int_rule_ids, const uint32_t &rules_nb);
         void flow_rule_cache_calibrate(const HashMap<uint32_t, String> &rules_map);
@@ -166,11 +155,12 @@ class FlowRuleManager {
         String flow_rules_from_file_to_string(const String &filename);
 
         // Install flow rule(s) in a NIC
-        int flow_rules_install(const String &rules, const uint32_t &rules_nb);
+        int flow_rules_install(const String &rules, const uint32_t &rules_nb, const bool verbose=true);
         int flow_rule_install(
             const uint32_t &int_rule_id, const uint32_t &rule_id,
             const int &core_id, const String &rule,
-            const bool with_cache = true
+            const bool with_cache = true,
+	    const bool verbose=true
         );
 
         // Verify the presence/absence of a list of rules in/from the NIC

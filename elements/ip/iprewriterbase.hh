@@ -103,8 +103,8 @@ class IPRewriterBase : public BatchElement { public:
 	CONFIGURE_PHASE_USER = CONFIGURE_PHASE_REWRITER + 1
     };
 
-    const char *port_count() const	{ return "1-/1-"; }
-    const char *processing() const	{ return PUSH; }
+    const char *port_count() const override	{ return "1-/1-"; }
+    const char *processing() const override	{ return PUSH; }
 
     int configure_phase() const		{ return CONFIGURE_PHASE_REWRITER; }
     int configure(Vector<String> &conf, ErrorHandler *errh) CLICK_COLD;
@@ -150,9 +150,16 @@ class IPRewriterBase : public BatchElement { public:
     uint32_t **_timeouts;
 
     uint32_t _gc_interval_sec;
-    per_thread<Timer> _gc_timer;
+
+    struct IPRewriterState {
+        Timer gc_timer;
+        IPFlowID last_id;
+        IPRewriterEntry* last_entry;
+    };
+    per_thread<IPRewriterState> _state;
 
     bool _set_aggregate;
+    bool _use_cache;
 
     enum {
 	default_timeout = 300,	   // 5 minutes

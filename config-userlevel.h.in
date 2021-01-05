@@ -184,6 +184,9 @@
 /* Define if you have the sigaction function. */
 #undef HAVE_SIGACTION
 
+/* Define if you have simulated timing enabled. */
+#undef HAVE_SIMTIME
+
 /* Define if you have the snprintf function. */
 #undef HAVE_SNPRINTF
 
@@ -228,6 +231,9 @@
 
 /* Define if a Click user-level driver might run multiple threads. */
 #undef HAVE_USER_MULTITHREAD
+
+/* Define if we are using builtins atomics or Click implementation. */
+#undef HAVE_ATOMIC_BUILTINS
 
 /* Define if Zero-copy is enabled. */
 #undef HAVE_ZEROCOPY
@@ -314,6 +320,21 @@ typedef unsigned long uintptr_t;
 # define HAVE_MULTITHREAD HAVE_USER_MULTITHREAD
 #endif
 
+/* Define HAVE_ATOMIC_BUILTINS based on HAVE_ATOMIC_BUILTINS. */
+#ifdef HAVE_ATOMIC_BUILTINS
+#if __GNUC__ > 4 || \
+    (__GNUC__ == 4 && (__GNUC_MINOR__ > 7 || \
+    (__GNUC_MINOR__ == 7 && \
+     __GNUC_PATCHLEVEL__ > 0)))
+
+    # define HAVE_ATOMIC_BUILTINS 1
+#else
+    # error "Cannot enable atomic builtins! GCC must be >= 4.7.0"
+    # define HAVE_ATOMIC_BUILTINS 0
+#endif
+#endif
+
+
 /* Define HAVE_USE_CLOCK_GETTIME if the clock_gettime function is usable. */
 #ifndef HAVE_USE_CLOCK_GETTIME
 # if HAVE_DECL_CLOCK_GETTIME && HAVE_CLOCK_GETTIME
@@ -334,7 +355,7 @@ typedef unsigned long uintptr_t;
 #endif
 
 /* Define if mmap is allowed. */
-#if defined(HAVE_SYS_MMAN_H) && defined(HAVE_MMAP)
+#if defined(HAVE_SYS_MMAN_H) && defined(HAVE_MMAP) && !CLICK_PACKET_USE_DPDK
 # define ALLOW_MMAP 1
 #endif
 

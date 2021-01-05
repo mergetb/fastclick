@@ -25,8 +25,15 @@
 #include <click/dpdkdevice.hh>
 #include <click/userutils.hh>
 #include <rte_errno.h>
+#include <click/dpdk_glue.hh>
 
-#if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+#if CLICK_PACKET_USE_DPDK
+#define DPDK_ANNO_SIZE sizeof(Packet::AllAnno)
+#else
+#define DPDK_ANNO_SIZE 0
+#endif
+
+#if HAVE_FLOW_API
     #include <click/flowrulemanager.hh>
 extern "C" {
     #include <rte_pmd_ixgbe.h>
@@ -39,7 +46,7 @@ DPDKDevice::DPDKDevice() : port_id(-1), info() {
 }
 
 DPDKDevice::DPDKDevice(portid_t port_id) : port_id(port_id) {
-    #if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+    #if HAVE_FLOW_API
         if (port_id >= 0)
             initialize_flow_rule_manager(port_id, ErrorHandler::default_handler());
     #endif
@@ -94,7 +101,7 @@ int DPDKDevice::set_rss_max(int max)
     return status;
 }
 
-#if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+#if HAVE_FLOW_API
 /**
  * Called by the constructor of DPDKDevice.
  * Flow Rule Manager must be strictly invoked once for each port.
@@ -113,7 +120,7 @@ void DPDKDevice::initialize_flow_rule_manager(const portid_t &port_id, ErrorHand
     const portid_t p_id = flow_rule_mgr->get_port_id();
     assert((p_id >= 0) && (p_id == port_id));
 }
-#endif /* RTE_VERSION >= RTE_VERSION_NUM(17,5,0,0) */
+#endif /* HAVE_FLOW_API */
 
 
 /* Wraps rte_eth_dev_socket_id(), which may return -1 for valid ports when NUMA
@@ -213,16 +220,16 @@ int DPDKDevice::alloc_pktmbufs(ErrorHandler* errh)
     }
 
 #if HAVE_DPDK_PACKET_POOL
-	int total = 0;
-	for (unsigned i = 0; i < _nr_pktmbuf_pools; i++) {
-		total += get_nb_mbuf(i);
-	}
+    int total = 0;
+    for (unsigned i = 0; i < _nr_pktmbuf_pools; i++) {
+        total += get_nb_mbuf(i);
+    }
 
-	if (Packet::max_data_pool_size() > 0) {
-		if (Packet::max_data_pool_size() + 8192 > total) {
-			return errh->error("--enable-dpdk-pool requires more DPDK buffers than the amount of packet that can stay in the queue. Please use DPDKInfo to allocate more than %d DPDK buffers or compile without --enable-dpdk-pool", Packet::max_data_pool_size() + 8192);
-		}
-	}
+    if (Packet::max_data_pool_size() > 0) {
+        if (Packet::max_data_pool_size() + 8192 > total) {
+            return errh->error("--enable-dpdk-pool requires more DPDK buffers than the amount of packet that can stay in the queue. Please use DPDKInfo to allocate more than %d DPDK buffers or compile without --enable-dpdk-pool", Packet::max_data_pool_size() + 8192);
+        }
+    }
 #endif
 
     if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
@@ -234,7 +241,7 @@ int DPDKDevice::alloc_pktmbufs(ErrorHandler* errh)
                         _pktmbuf_pools[i] =
 #if RTE_VERSION >= RTE_VERSION_NUM(2,2,0,0)
                         rte_pktmbuf_pool_create(name, get_nb_mbuf(i),
-                                                MBUF_CACHE_SIZE, 0, MBUF_DATA_SIZE, i);
+                                                MBUF_CACHE_SIZE, DPDK_ANNO_SIZE, MBUF_DATA_SIZE, i);
 #else
                         rte_mempool_create(
                                         name, get_nb_mbuf(i), MBUF_SIZE, MBUF_CACHE_SIZE,
@@ -313,7 +320,7 @@ static String keep_token_left(String str, char delimiter)
 }
 
 
-#if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+#if HAVE_FLOW_API
 int DPDKDevice::set_mode(
         String mode, int num_pools, Vector<int> vf_vlan,
         const String &flow_rules_filename, ErrorHandler *errh)
@@ -329,7 +336,7 @@ int DPDKDevice::set_mode(
 
     if (mode == "none") {
         m = ETH_MQ_RX_NONE;
-#if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+#if HAVE_FLOW_API
     } else if ((mode == "rss") || (mode == FlowRuleManager::DISPATCHING_MODE) || (mode == "")) {
 #else
     } else if ((mode == "rss") || (mode == "")) {
@@ -378,7 +385,7 @@ int DPDKDevice::set_mode(
 
     }
 
-#if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+#if HAVE_FLOW_API
     if (mode == FlowRuleManager::DISPATCHING_MODE) {
         FlowRuleManager *flow_rule_mgr = FlowRuleManager::get_flow_rule_mgr(port_id, errh);
         flow_rule_mgr->set_active(true);
@@ -387,7 +394,7 @@ int DPDKDevice::set_mode(
             "DPDK Flow Rule Manager (port %u): State %s - Isolation Mode %s - Source file '%s'",
             port_id,
             flow_rule_mgr->active() ? "active" : "inactive",
-            FlowRuleManager::isolated(port_id) ? "active" : "inactive",
+            isolated() ? "active" : "inactive",
             flow_rules_filename.empty() ? "None" : flow_rules_filename.c_str()
         );
     }
@@ -694,11 +701,11 @@ also                ETH_TXQ_FLAGS_NOMULTMEMP
         }
     }
 
-#if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+#if HAVE_FLOW_API
     if (info.flow_isolate) {
-        FlowRuleManager::set_isolation_mode(port_id, true);
+        set_isolation_mode(true);
     } else {
-        FlowRuleManager::set_isolation_mode(port_id, false);
+        set_isolation_mode(false);
     }
 #endif
 
@@ -714,8 +721,21 @@ also                ETH_TXQ_FLAGS_NOMULTMEMP
     if (info.init_mac != EtherAddress()) {
         struct rte_ether_addr addr;
         memcpy(&addr, info.init_mac.data(), sizeof(struct rte_ether_addr));
-        if (rte_eth_dev_default_mac_addr_set(port_id, &addr) != 0) {
-            return errh->error("Could not set default MAC address");
+    int result = rte_eth_dev_default_mac_addr_set(port_id, &addr);
+    if (result != 0) {
+        if (result == -ENOTSUP) {
+        errh->warning("The device does not support changing its MAC address!");
+        } else
+            return errh->error("Could not set default MAC address for port %u, result: %d , mac address: %02X:%02X:%02X:%02X:%02X:%02X",
+                port_id,
+                result,
+                addr.addr_bytes[0],
+                addr.addr_bytes[1],
+                addr.addr_bytes[2],
+                addr.addr_bytes[3],
+                addr.addr_bytes[4],
+                addr.addr_bytes[5]
+                );
         }
     }
 
@@ -745,7 +765,7 @@ also                ETH_TXQ_FLAGS_NOMULTMEMP
         /*
          * Set mac for each pool and parameters
          */
-        for (unsigned q = 0; q < info.num_pools; q++) {
+        for (int q = 0; q < info.num_pools; q++) {
             struct rte_ether_addr mac = gen_mac(port_id, q);
             printf("Port %u vmdq pool %u set mac %02x:%02x:%02x:%02x:%02x:%02x\n",
                         port_id, q,
@@ -874,7 +894,7 @@ void DPDKDevice::set_tx_offload(uint64_t offload) {
     info.tx_offload |= offload;
 }
 
-void DPDKDevice::set_flow_isolate(const bool &flow_isolate) {
+void DPDKDevice::set_init_flow_isolate(const bool &flow_isolate) {
     info.flow_isolate = flow_isolate;
 }
 
@@ -926,17 +946,17 @@ int DPDKDevice::add_queue(DPDKDevice::Dir dir, unsigned &queue_id,
                 " be in promiscuous mode", port_id);
         info.promisc |= promisc;
 
-		if (info.rx_queues.size() > 0 && vlan_filter != info.vlan_filter)
-			return errh->error(
-					"Some elements disagree on whether or not device %u should"
-							" filter VLAN tagged packets", port_id);
-		info.vlan_filter |= vlan_filter;
+        if (info.rx_queues.size() > 0 && vlan_filter != info.vlan_filter)
+            return errh->error(
+                    "Some elements disagree on whether or not device %u should"
+                            " filter VLAN tagged packets", port_id);
+        info.vlan_filter |= vlan_filter;
 
-		if (info.rx_queues.size() > 0 && vlan_strip != info.vlan_strip)
-			return errh->error(
-					"Some elements disagree on whether or not device %u should"
-							" strip VLAN tagged packets", port_id);
-		info.vlan_strip |= vlan_strip;
+        if (info.rx_queues.size() > 0 && vlan_strip != info.vlan_strip)
+            return errh->error(
+                    "Some elements disagree on whether or not device %u should"
+                            " strip VLAN tagged packets", port_id);
+        info.vlan_strip |= vlan_strip;
 
         if (info.rx_queues.size() > 0 && vlan_extend != info.vlan_extend)
             return errh->error(
@@ -1007,6 +1027,19 @@ int DPDKDevice::static_initialize(ErrorHandler* errh) {
         }
         return -1;
     }
+#if RTE_VERSION >= RTE_VERSION_NUM(20,11,0,0)
+        rte_mbuf_dyn_rx_timestamp_register(&timestamp_dynfield_offset, &timestamp_dynflag);
+        if (timestamp_dynfield_offset < 0) {
+            rte_exit(EXIT_FAILURE, "Cannot register mbuf field\n");
+        }
+        if (timestamp_dynflag < 0) {
+            RTE_ETHDEV_LOG(ERR,
+                    "Failed to register mbuf flag for Rx timestamp\n");
+            return -rte_errno;
+        }
+        //timestamp_dynflag = RTE_BIT64(offset);
+#endif
+
     return 0;
 }
 
@@ -1054,7 +1087,7 @@ int DPDKDevice::initialize(ErrorHandler *errh)
     _is_initialized = true;
 
     // Configure Flow Rule Manager
-#if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+#if HAVE_FLOW_API
     for (HashTable<portid_t, FlowRuleManager *>::iterator
             it = FlowRuleManager::dev_flow_rule_mgr.begin();
             it != FlowRuleManager::dev_flow_rule_mgr.end(); ++it) {
@@ -1078,7 +1111,7 @@ int DPDKDevice::initialize(ErrorHandler *errh)
     return 0;
 }
 
-#if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+#if HAVE_FLOW_API
 int DPDKDevice::configure_nic(const portid_t &port_id)
 {
     if (!_is_initialized) {
@@ -1113,7 +1146,8 @@ void DPDKDevice::free_pkt(unsigned char *, size_t, void *pktmbuf)
 
 void DPDKDevice::cleanup(ErrorHandler *errh)
 {
-#if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
+    (void)errh;
+#if HAVE_FLOW_API
     HashTable<portid_t, FlowRuleManager *> map = FlowRuleManager::flow_rule_manager_map();
 
     for (HashTable<portid_t, FlowRuleManager *>::const_iterator
@@ -1203,7 +1237,7 @@ DPDKDeviceArg::parse(
 #endif
     }
 
-    if (port_id >= 0 && port_id < DPDKDevice::dev_count()) {
+    if (port_id < DPDKDevice::dev_count()) {
         result = DPDKDevice::ensure_device(port_id);
     } else {
         ctx.error("Cannot resolve PCI address to DPDK device");
@@ -1216,7 +1250,7 @@ DPDKDeviceArg::parse(
 
 bool
 FlowControlModeArg::parse(
-    const String &str, FlowControlMode &result, const ArgContext &ctx) {
+    const String &str, FlowControlMode &result, const ArgContext &) {
     str.lower();
     if (str == "full" || str == "on") {
         result = FC_FULL;
@@ -1321,6 +1355,11 @@ DPDKRing::parse(Args* args) {
     return 0;
 }
 
+#if RTE_VERSION >= RTE_VERSION_NUM(20,11,0,0)
+    int timestamp_dynfield_offset;
+    uint64_t timestamp_dynflag;
+#endif
+
 #if HAVE_DPDK_PACKET_POOL
 /**
  * Must be able to fill the packet data pool,
@@ -1332,9 +1371,9 @@ int DPDKDevice::DEFAULT_NB_MBUF = 65536 - 1;
 #endif
 Vector<int> DPDKDevice::NB_MBUF;
 #ifdef RTE_MBUF_DEFAULT_BUF_SIZE
-int DPDKDevice::MBUF_DATA_SIZE = RTE_MBUF_DEFAULT_BUF_SIZE;
+int DPDKDevice::MBUF_DATA_SIZE = RTE_MBUF_DEFAULT_BUF_SIZE + DPDK_ANNO_SIZE;
 #else
-int DPDKDevice::MBUF_DATA_SIZE = 2048 + RTE_PKTMBUF_HEADROOM;
+int DPDKDevice::MBUF_DATA_SIZE = 2048 + RTE_PKTMBUF_HEADROOM + DPDK_ANNO_SIZE;
 #endif
 int DPDKDevice::MBUF_SIZE = MBUF_DATA_SIZE
                           + sizeof (struct rte_mbuf);

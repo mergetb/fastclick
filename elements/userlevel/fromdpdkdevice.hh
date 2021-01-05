@@ -228,6 +228,7 @@ Returns the device's link type (only fiber is currently supported).
 =h xstats read-only
 
 Returns a device's detailed packet and byte counters.
+If a parameter is given, only the matching counter will be returned.
 
 =h queue_count read-only
 
@@ -341,7 +342,7 @@ Returns the number of errors of this device, as computed by the hardware.
 
 =h nombufs read-only
 
-Returns the number of mbufs allocated for this devce.
+Returns the total number of RX mbuf allocation failures. 
 
 =h rule_add write-only
 
@@ -403,23 +404,23 @@ public:
     FromDPDKDevice() CLICK_COLD;
     ~FromDPDKDevice() CLICK_COLD;
 
-    const char *class_name() const { return "FromDPDKDevice"; }
-    const char *port_count() const { return PORTS_0_1; }
-    const char *processing() const { return PUSH; }
+    const char *class_name() const override { return "FromDPDKDevice"; }
+    const char *port_count() const override { return PORTS_0_1; }
+    const char *processing() const override { return PUSH; }
     void* cast(const char* name) override;
 
-    int configure_phase() const {
+    int configure_phase() const override {
         return CONFIGURE_PHASE_PRIVILEGED - 5;
     }
-    bool can_live_reconfigure() const { return false; }
+    bool can_live_reconfigure() const override { return false; }
 
-    int configure(Vector<String> &, ErrorHandler *) CLICK_COLD;
-    int initialize(ErrorHandler *) CLICK_COLD;
-    void add_handlers() CLICK_COLD;
-    void cleanup(CleanupStage) CLICK_COLD;
-    bool run_task(Task *);
+    int configure(Vector<String> &, ErrorHandler *) override CLICK_COLD;
+    int initialize(ErrorHandler *) override CLICK_COLD;
+    void add_handlers() override CLICK_COLD;
+    void cleanup(CleanupStage) override CLICK_COLD;
+    bool run_task(Task *) override;
 #if HAVE_DPDK_INTERRUPT
-    void selected(int fd, int mask);
+    void selected(int fd, int mask) override;
 #endif
 
     inline DPDKDevice *get_device() {
@@ -447,25 +448,6 @@ private:
     static String statistics_handler(Element *e, void *thunk) CLICK_COLD;
     static int xstats_handler(int operation, String &input, Element *e,
                               const Handler *handler, ErrorHandler *errh);
-    enum {
-        h_vendor, h_driver, h_carrier, h_duplex, h_autoneg, h_speed, h_type,
-        h_ipackets, h_ibytes, h_imissed, h_ierrors, h_nombufs,
-        h_stats_packets, h_stats_bytes,
-        h_active, h_safe_active,
-        h_xstats, h_queue_count,
-        h_nb_rx_queues, h_nb_tx_queues, h_nb_vf_pools,
-        h_rss,
-        h_mac, h_add_mac, h_remove_mac, h_vf_mac,
-        h_mtu,
-        h_device,
-    #if RTE_VERSION >= RTE_VERSION_NUM(20,2,0,0)
-        h_rule_add, h_rules_del, h_rules_isolate, h_rules_flush,
-        h_rules_list, h_rules_list_with_hits, h_rules_ids_global, h_rules_ids_internal,
-        h_rules_count, h_rules_count_with_hits, h_rule_packet_hits, h_rule_byte_count,
-        h_rules_aggr_stats
-    #endif
-    };
-
     DPDKDevice* _dev;
 
 #if HAVE_DPDK_INTERRUPT
@@ -477,6 +459,9 @@ private:
     per_thread<FDState> _fdstate;
 #endif
     bool _set_timestamp;
+    bool _tco;
+    bool _uco;
+    bool _ipco;
 };
 
 CLICK_ENDDECLS

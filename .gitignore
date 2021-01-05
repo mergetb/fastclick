@@ -30,7 +30,9 @@ stamp-h
 *.sw*
 tags
 *.deb
-
 *.build
 *.buildinfo
 *.changes
+cscope.*
+**/.nfs*
+compile_commands.json
