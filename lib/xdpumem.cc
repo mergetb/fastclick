@@ -3,6 +3,7 @@
  *
  */
 
+#include <stdexcept>
 #include <click/xdpumem.hh>
 
 using std::runtime_error;
