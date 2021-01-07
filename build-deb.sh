@@ -25,7 +25,7 @@ if [[ $containerize ]]; then
   exit $?
 fi
 
-curl https://pkg.mergetb.net/addrepo | RELEASE=kass bash -
+#curl https://pkg.mergetb.net/addrepo | RELEASE=kass bash -
 
 export TOOL_ARGS="apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes"
 mk-build-deps --install --tool="$TOOL_ARGS" debian/control

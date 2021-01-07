@@ -1,7 +1,7 @@
-FROM mergetb/kass-builder
+FROM mergetb/kernel-builder
 
-RUN curl -L https://pkg.mergetb.net/addrepo | RELEASE=kass bash -
-RUN apt-get install -y libbpf-moa
+#RUN curl -L https://pkg.mergetb.net/addrepo | RELEASE=kass bash -
+RUN apt-get install -y libbpf-dev
 
 
 COPY . /click
