@@ -6,16 +6,8 @@
 #include <click/packet.hh>
 #include <clicknet/ether.h>
 #include <clicknet/tcp.h>
-#include <click/handlercall.hh>
 
 CLICK_DECLS
-
-struct flow_t {
-  Packet *syn_packet;
-  Packet *fin_packet;
-  Packet *data_packet;
-  unsigned flow_count;
-};
 
 /*
  * =c
@@ -74,66 +66,62 @@ struct flow_t {
  *    -> ToDevice;
  */
 class FastTCPFlows : public BatchElement {
+    public:
+        FastTCPFlows() CLICK_COLD;
+        ~FastTCPFlows() CLICK_COLD;
 
-  bool _rate_limited;
-  bool _sent_all_fins;
-  unsigned _len;
-  click_ether _ethh;
-  struct in_addr _sipaddr;
-  struct in_addr _dipaddr;
-  unsigned int _nflows;
-  unsigned int _last_flow;
-  unsigned int _flowsize;
-  bool _cksum;
-  click_jiffies_t _first;
-  click_jiffies_t _last;
-  HandlerCall *_end_h;
+        const char *class_name() const override    { return "FastTCPFlows"; }
+        const char *port_count() const override    { return PORTS_0_1; }
+        const char *processing() const override    { return PULL; }
 
-  flow_t *_flows;
-  void change_ports(int);
-  Packet *get_packet();
+        int configure(Vector<String> &, ErrorHandler *) CLICK_COLD;
+        int initialize(ErrorHandler *) CLICK_COLD;
+        void cleanup(CleanupStage) CLICK_COLD;
+        Packet *pull(int);
 
- public:
+    #if HAVE_BATCH
+        PacketBatch *pull_batch(int, unsigned);
+    #endif
 
-  static const unsigned NO_LIMIT = 0xFFFFFFFFU;
+        void add_handlers() CLICK_COLD;
+        void reset();
+        unsigned count() { return _count; }
+        click_jiffies_t first() { return _first; }
+        click_jiffies_t last() { return _last; }
 
-  GapRate _rate;
-  unsigned _count;
-  unsigned _limit;
-  bool _active;
-  bool _stop;
+        static const unsigned NO_LIMIT = 0xFFFFFFFFU;
 
-  FastTCPFlows() CLICK_COLD;
-  ~FastTCPFlows() CLICK_COLD;
+        GapRate _rate;
+        unsigned _count;
+        unsigned _limit;
+        bool _active;
+        bool _stop;
 
-  const char *class_name() const	{ return "FastTCPFlows"; }
-  const char *port_count() const	{ return PORTS_0_1; }
-  const char *processing() const	{ return PULL; }
+    private:
+        bool _rate_limited;
+        bool _sent_all_fins;
+        unsigned _len;
+        click_ether _ethh;
+        struct in_addr _sipaddr;
+        struct in_addr _dipaddr;
+        unsigned int _nflows;
+        unsigned int _last_flow;
+        unsigned int _flowsize;
+        bool _cksum;
+        click_jiffies_t _first;
+        click_jiffies_t _last;
 
-  int configure(Vector<String> &, ErrorHandler *) CLICK_COLD;
-  int initialize(ErrorHandler *) CLICK_COLD;
-  void cleanup(CleanupStage) CLICK_COLD;
-  Packet *pull(int);
+        struct flow_t {
+            Packet *syn_packet;
+            Packet *fin_packet;
+            Packet *data_packet;
+            unsigned flow_count;
+        };
 
-  static Packet *make_packet(
-      unsigned len, 
-      click_ether eth, 
-      in_addr sipaddr, 
-      in_addr dipaddr,
-      unsigned short sport, 
-      unsigned short dport, 
-      uint8_t flags
-  );
+        flow_t *_flows;
+        void change_ports(int);
+        Packet *get_packet();
 
-#if HAVE_BATCH
-  PacketBatch *pull_batch(int, unsigned);
-#endif
-
-  void add_handlers() CLICK_COLD;
-  void reset();
-  unsigned count() { return _count; }
-  click_jiffies_t first() { return _first; }
-  click_jiffies_t last() { return _last; }
 };
 
 CLICK_ENDDECLS

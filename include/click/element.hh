@@ -26,12 +26,6 @@ class BatchElement;
 
 #define BATCH_MAX_PULL 256
 
-static constexpr int
-  CONFIGURE_SUCCESS{0},
-  CONFIGURE_FAIL{-1},
-  INITIALIZE_SUCCESS{0},
-  INITIALIZE_FAIL{-1};
-
 /** @file <click/element.hh>
  * @brief Click's Element class.
  */
@@ -610,6 +604,8 @@ Element::Port::Port()
 {
     PORT_ASSIGN(0);
 }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpmf-conversions"
 
 inline void
 Element::Port::assign(bool isoutput, Element *e, int port)
@@ -641,6 +637,8 @@ Element::Port::assign(bool isoutput, Element *e, int port)
     }
 #endif
 }
+
+#pragma GCC diagnostic pop
 
 inline void
 Element::Port::assign(bool isoutput, Element *owner, Element *e, int port)

@@ -46,9 +46,9 @@ class RatedUnqueue : public BatchElement { public:
 
     RatedUnqueue() CLICK_COLD;
 
-    const char *class_name() const	{ return "RatedUnqueue"; }
-    const char *port_count() const	{ return PORTS_1_1; }
-    const char *processing() const	{ return PULL_TO_PUSH; }
+    const char *class_name() const override	{ return "RatedUnqueue"; }
+    const char *port_count() const override	{ return PORTS_1_1; }
+    const char *processing() const override	{ return PULL_TO_PUSH; }
     bool is_bandwidth() const		{ return class_name()[0] == 'B'; }
 
     int configure(Vector<String> &, ErrorHandler *) CLICK_COLD;
@@ -67,12 +67,12 @@ class RatedUnqueue : public BatchElement { public:
     Task _task;
     Timer _timer;
     NotifierSignal _signal;
-    uint64_t _runs;
-    uint64_t _packets;
-    uint64_t _pushes;
-    uint64_t _failed_pulls;
-    uint64_t _empty_runs;
-    uint64_t _burst;
+    uint32_t _runs;
+    uint32_t _packets;
+    uint32_t _pushes;
+    uint32_t _failed_pulls;
+    uint32_t _empty_runs;
+    uint32_t _burst;
 
     enum { h_calls, h_rate };
 

@@ -72,6 +72,10 @@ _LDLIBS-$(CONFIG_RTE_LIBRTE_PDUMP)          += -lrte_pdump
 _LDLIBS-$(CONFIG_RTE_LIBRTE_DISTRIBUTOR)    += -lrte_distributor
 _LDLIBS-$(CONFIG_RTE_LIBRTE_IP_FRAG)        += -lrte_ip_frag
 _LDLIBS-$(CONFIG_RTE_LIBRTE_METER)          += -lrte_meter
+ifeq ($(shell [ -n "$(RTE_VER_YEAR)" ] && ( ( [ "$(RTE_VER_YEAR)" -ge 20 ] && [ "$(RTE_VER_MONTH)" -ge 08 ] ) || [ $(RTE_VER_YEAR) -ge 21 ] ) && echo true),true)
+_LDLIBS-$(CONFIG_RTE_LIBRTE_FIB)            += -lrte_fib
+_LDLIBS-$(CONFIG_RTE_LIBRTE_RIB)            += -lrte_rib
+endif
 _LDLIBS-$(CONFIG_RTE_LIBRTE_LPM)            += -lrte_lpm
 _LDLIBS-$(CONFIG_RTE_LIBRTE_ACL)            += -lrte_acl
 _LDLIBS-$(CONFIG_RTE_LIBRTE_TELEMETRY)      += -lrte_telemetry -ljansson
@@ -106,6 +110,9 @@ _LDLIBS-$(CONFIG_RTE_LIBRTE_SCHED)          += -lrt
 ifeq ($(shell [ -n "$(RTE_VER_YEAR)" ] && ( ( [ "$(RTE_VER_YEAR)" -ge 20 ] && [ "$(RTE_VER_MONTH)" -ge 05 ] ) || [ $(RTE_VER_YEAR) -ge 21 ] ) && echo true),true)
 	_LDLIBS-$(CONFIG_RTE_LIBRTE_GRAPH)          += -lrte_graph
 	_LDLIBS-$(CONFIG_RTE_LIBRTE_NODE)           += -lrte_node
+endif
+ifeq ($(shell [ -n "$(RTE_VER_YEAR)" ] && ( ( [ "$(RTE_VER_YEAR)" -ge 19 ] && [ "$(RTE_VER_MONTH)" -ge 05 ] ) || [ $(RTE_VER_YEAR) -ge 20 ] ) && echo true),true)
+	_LDLIBS-$(CONFIG_RTE_LIBRTE_RCU)            += -lrte_rcu
 endif
 _LDLIBS-$(CONFIG_RTE_LIBRTE_MEMBER)         += -lm
 _LDLIBS-$(CONFIG_RTE_LIBRTE_METER)          += -lm
@@ -155,6 +162,9 @@ ifeq ($(shell [ -n "$(RTE_VER_YEAR)" ] && ( ( [ "$(RTE_VER_YEAR)" -ge 19 ] && [ 
 	endif
 endif
 _LDLIBS-$(CONFIG_RTE_LIBRTE_COMPRESSDEV)    += -lrte_compressdev
+ifeq ($(shell [ -n "$(RTE_VER_YEAR)" ] && ( ( [ "$(RTE_VER_YEAR)" -ge 20 ] && [ "$(RTE_VER_MONTH)" -ge 08 ] ) || [ $(RTE_VER_YEAR) -ge 21 ] ) && echo true),true)
+	_LDLIBS-$(CONFIG_RTE_LIBRTE_REGEXDEV)       += -lrte_regexdev
+endif
 _LDLIBS-$(CONFIG_RTE_LIBRTE_EVENTDEV)       += -lrte_eventdev
 _LDLIBS-$(CONFIG_RTE_LIBRTE_RAWDEV)         += -lrte_rawdev
 ifeq ($(CONFIG_RTE_LIBRTE_RAWDEV),y)
@@ -284,6 +294,9 @@ endif
 _LDLIBS-$(CONFIG_RTE_LIBRTE_MLX5_PMD)       += -lrte_pmd_mlx5
 ifeq ($(shell [ -n "$(RTE_VER_YEAR)" ] && [ "$(RTE_VER_YEAR)" -ge 20 ] && echo true),true)
 _LDLIBS-$(CONFIG_RTE_LIBRTE_MLX5_VDPA_PMD)  += -lrte_pmd_mlx5_vdpa
+endif
+ifeq ($(shell [ -n "$(RTE_VER_YEAR)" ] && ( ( [ "$(RTE_VER_YEAR)" -ge 20 ] && [ "$(RTE_VER_MONTH)" -ge 08 ] ) || [ $(RTE_VER_YEAR) -ge 21 ] ) && echo true),true)
+_LDLIBS-$(CONFIG_RTE_LIBRTE_MLX5_REGEX_PMD)  += -lrte_pmd_mlx5_regex
 endif
 ifeq ($(CONFIG_RTE_IBVERBS_LINK_DLOPEN),y)
 	ifeq ($(shell [ -n "$(RTE_VER_YEAR)" ] && [ "$(RTE_VER_YEAR)" -ge 20 ] && echo true),true)
@@ -482,64 +495,4 @@ ifeq ($(shell [ -n "$(RTE_VER_YEAR)" ] && ( ( [ "$(RTE_VER_YEAR)" -ge 16 ] && [ 
 else
 	override LDFLAGS := $(DPDK_OLD_LDFLAGS)
 endif
-
-############################################################
-## Flow director library available at or after DPDK v20.02
-############################################################
-ifeq ($(shell [ -n $(RTE_VER_YEAR) ] && [ $(RTE_VER_YEAR) -ge 20 ] && [ -n $(HAVE_FLOW_API) ] && echo true),true)
-
-$(debug LIBRTE_PARSE=YES)
-
-RTE_VERSION=$(RTE_VER_YEAR).$(RTE_VER_MONTH).$(RTE_VER_MINOR)
-PARSE_PATH=../lib/librte_parse_$(RTE_VERSION)/
-
-${PARSE_PATH}.sentinel:
-	# Create the necessary folders for librte_parse
-	mkdir -p $(PARSE_PATH)
-	mkdir -p test-pmd
-	# Copy testpmd.c of the target DPDK version
-	cp -u $(RTE_SDK)/app/test-pmd/testpmd.c $(PARSE_PATH)
-	cp -u $(RTE_SDK)/app/test-pmd/testpmd.h $(PARSE_PATH)
-	cp -u $(RTE_SDK)/app/test-pmd/config.c $(PARSE_PATH)
-	# Strip the main function off to prevent complilation errors, while linking with Click
-	sed -i '/main(int/Q' $(PARSE_PATH)/testpmd.c
-	head -n -1 $(PARSE_PATH)/testpmd.c > $(PARSE_PATH)/testpmd_t.c;
-	mv $(PARSE_PATH)/testpmd_t.c $(PARSE_PATH)/testpmd.c
-	# Strip off testpmd report messages as our library prints its own report messages
-	sed -i '/printf("Flow rule #\%u created\\n", pf->id);/d' $(PARSE_PATH)/config.c
-	sed -i '/printf("Flow rule #\%u destroyed\\n", pf->id);/d' $(PARSE_PATH)/config.c
-
-	touch $(PARSE_PATH)/.sentinel
-
-test-pmd/%.o: ${PARSE_PATH}.sentinel
-	cp -u $(RTE_SDK)/app/test-pmd/$*.c $(PARSE_PATH)
-	$(CC) -o $@ -O3 -c $(PARSE_PATH)/$*.c $(CFLAGS) -I$(RTE_SDK)/app/test-pmd/
-
-# Object files present across all DPDK versions
-PARSE_OBJS = \
-	test-pmd/cmdline_flow.o \
-	test-pmd/macfwd.o test-pmd/cmdline.o test-pmd/txonly.o test-pmd/csumonly.o test-pmd/flowgen.o \
-	test-pmd/icmpecho.o test-pmd/ieee1588fwd.o test-pmd/iofwd.o test-pmd/macswap.o \
-	test-pmd/rxonly.o \
-
-# Additional object files
-PARSE_OBJS += test-pmd/cmdline_mtr.o test-pmd/cmdline_tm.o
-PARSE_OBJS += test-pmd/bpf_cmd.o
-PARSE_OBJS += test-pmd/parameters.o test-pmd/softnicfwd.o
-PARSE_OBJS += test-pmd/noisy_vnf.o test-pmd/util.o
-
-CFLAGS += -I../lib/librte_parse_$(RTE_VERSION)
-CXXFLAGS += -I../lib/librte_parse_$(RTE_VERSION)
-
-${PARSE_PATH}/%.o: ${PARSE_PATH}.sentinel
-	$(CC) -o $@ -O3 -c $(PARSE_PATH)/$*.c $(CFLAGS) -I$(RTE_SDK)/app/test-pmd/
-
-librte_parse.a: $(PARSE_OBJS) $(PARSE_PATH)/testpmd.o $(PARSE_PATH)/config.o
-	$(call verbose_cmd,$(AR_CREATE) librte_parse.a $(PARSE_OBJS) $(PARSE_PATH)/testpmd.o $(PARSE_PATH)/config.o,AR librte_parse.a)
-	$(call verbose_cmd,$(RANLIB),RANLIB,librte_parse.a)
-
-else
-
-$(debug LIBRTE_PARSE=NO)
-
-endif # RTE_VERSION >= 20.02
+include rte_parse.mk

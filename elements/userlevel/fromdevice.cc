@@ -44,13 +44,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include "fakepcap.hh"
+#include <linux/sockios.h>
 
 #if FROMDEVICE_ALLOW_LINUX
 # include <sys/socket.h>
 # include <net/if.h>
 # include <features.h>
 # include <linux/if_packet.h>
-#include <linux/sockios.h>
 # if HAVE_DPDK
 #  define ether_addr ether_addr_undefined
 # endif

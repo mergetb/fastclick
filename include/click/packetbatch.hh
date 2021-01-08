@@ -12,7 +12,7 @@ CLICK_DECLS
 #define FOR_EACH_PACKET(batch,p) for(Packet* p = batch;p != 0;p=p->next())
 
 /**
- * Iterate over a simply linked packet a batch. The current packet can be modified
+ * Iterate over all packets of a batch. The current packet can be modified
  *  during iteration as the "next" pointer is read before going in the core of
  *  the loop.
  */
@@ -31,7 +31,7 @@ CLICK_DECLS
                 Packet* p = batch;\
                 Packet* last = 0;\
                 for (;p != 0;p=efep_next,efep_next=(p==0?0:p->next())) {\
-            Packet* q = fnt(p);\
+                    Packet* q = fnt(p);\
                     if (q != p) {\
                         if (last) {\
                             last->set_next(q);\
@@ -44,9 +44,11 @@ CLICK_DECLS
                 }
 
 /**
- * Execute a function on each packets of a batch. The function may return
- * another packet to replace the current one. This version will stop when
- * a packet is dropped.
+ * Execute a function that returns a bool on each packets of a batch.
+ * The function may take the packet by reference and change the reference.
+ * If the function returns false, the loop stops and on_stop is called
+ * with the whole batch in argument, the packet causing the stop, and the next
+ * reference. This function does not kill any packet by itself.
  */
 #define EXECUTE_FOR_EACH_PACKET_UNTIL_DO(fnt,batch,on_stop) \
                 Packet* efep_next = ((batch != 0)? batch->next() : 0 );\
@@ -481,6 +483,40 @@ public :
         if (middle == tail()) {
             second = 0;
             return;
+        }
+
+        int total_count = count();
+
+        second = static_cast<PacketBatch*>(middle->next());
+        middle->set_next(0);
+
+        Packet* second_tail = tail();
+        set_tail(middle);
+
+        second->set_tail(second_tail);
+        second->set_count(total_count - first_batch_count);
+
+        set_count(first_batch_count);
+    }
+
+    /**
+     * @brief Cut a batch in two batches
+     *
+     * @param first_batch_count The number of packets in the first batch
+     * @param second Reference to set the head of the second batch
+     * @param safe Set to true for optimization if you're sure there is enough packets to cut, and first_batch_count is not 0
+     */
+    inline void split(int first_batch_count, PacketBatch* &second, const bool &safe = false) {
+        Packet* middle = first();
+        if (unlikely(!safe)) {
+            assert(first_batch_count > 0);
+        }
+        for (int i = 0; i < first_batch_count - 1; i++) {
+            middle = middle->next();
+            if (unlikely(!safe && middle == 0)) {
+                second = 0;
+                break;
+            }
         }
 
         int total_count = count();

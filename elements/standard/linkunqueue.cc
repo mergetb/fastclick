@@ -215,7 +215,7 @@ LinkUnqueue::write_handler(const String &s, Element *e, void *thunk, ErrorHandle
           break;
     }
     case H_BANDWIDTH: {
-        unsigned long long bw;
+        uint32_t bw;
         if (!cp_bandwidth(s, &bw)) {
             return errh->error("invalid bandwidth");
         } else if (bw < 100) {
